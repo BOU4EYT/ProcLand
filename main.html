@@ -1,0 +1,898 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ProcLand: Infinite Frontier</title>
+  <style>
+    :root {
+      --bg: #0e122b;
+      --panel: #1a2250;
+      --panel-hi: #25306b;
+      --line: #3d4ea6;
+      --text: #edf2ff;
+      --muted: #aab6e8;
+      --good: #62f09e;
+      --warn: #ffbf6b;
+      --bad: #ff6f79;
+      --accent: #7aa9ff;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, Segoe UI, Roboto, Arial, sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at top, #212d6a 0%, var(--bg) 60%);
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 12px;
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: linear-gradient(180deg, var(--panel), #141b41);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.3);
+      padding: 10px;
+    }
+
+    #header { grid-column: span 12; }
+    #world { grid-column: span 7; }
+    #economy { grid-column: span 5; }
+    #automation { grid-column: span 5; }
+    #meta { grid-column: span 3; }
+    #log { grid-column: span 4; }
+
+    h1, h2, h3 { margin: 0.35rem 0; }
+    p { margin: 0.25rem 0; }
+
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .pill {
+      border-radius: 999px;
+      border: 1px solid #4d61c8;
+      background: #111742;
+      color: var(--muted);
+      padding: 3px 10px;
+      font-size: 0.8rem;
+    }
+
+    .resource-grid,
+    .card-grid {
+      display: grid;
+      gap: 6px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .resource,
+    .card {
+      background: #141c45;
+      border: 1px solid #3c4f9d;
+      border-radius: 8px;
+      padding: 8px;
+    }
+
+    .resource {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.92rem;
+    }
+
+    button {
+      border: 1px solid #5972d8;
+      border-radius: 8px;
+      background: linear-gradient(180deg, #2e458c, #22356f);
+      color: var(--text);
+      padding: 7px 10px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { filter: brightness(1.08); }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .zones {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 7px;
+      margin-top: 8px;
+    }
+
+    .zone {
+      border: 1px solid #4156af;
+      background: linear-gradient(180deg, var(--panel-hi), #1a2457);
+      border-radius: 9px;
+      padding: 8px;
+      min-height: 98px;
+      cursor: pointer;
+      transition: transform 120ms ease, border-color 120ms ease;
+    }
+    .zone:hover { transform: translateY(-2px); border-color: var(--accent); }
+    .zone.active { border-color: var(--good); box-shadow: 0 0 0 1px var(--good) inset; }
+
+    .progress {
+      width: 100%;
+      height: 11px;
+      background: #101536;
+      border: 1px solid #304084;
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 8px 0;
+    }
+    .bar {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, #62f09e, #39c7ca);
+      transition: width 150ms linear;
+    }
+
+    .muted { color: var(--muted); }
+    .good { color: var(--good); }
+    .warn { color: var(--warn); }
+    .bad { color: var(--bad); }
+
+    #eventLog {
+      height: 340px;
+      overflow: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.82rem;
+      line-height: 1.35;
+      background: #0d1330;
+      border: 1px solid #2f418b;
+      border-radius: 8px;
+      padding: 8px;
+    }
+
+    .small { font-size: 0.84rem; }
+
+    @media (max-width: 1180px) {
+      #world, #economy, #automation, #meta, #log { grid-column: span 12; }
+      .zones { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <section id="header" class="panel">
+      <h1>ProcLand: Infinite Frontier</h1>
+      <p class="muted">A fully procedural idle-strategy roguelite. Every world uses a seed, new zones, changing events, and different growth routes.</p>
+      <div class="row">
+        <div class="pill">Seed <span id="seedText"></span></div>
+        <div class="pill">Tier <span id="tierText"></span></div>
+        <div class="pill">Age <span id="runtimeText">0s</span></div>
+        <div class="pill">Worlds Cleared <span id="clearsText">0</span></div>
+        <div class="pill">Difficulty Mod <span id="diffText">1.00x</span></div>
+      </div>
+    </section>
+
+    <section id="world" class="panel">
+      <h2>Procedural Region</h2>
+      <p id="regionTitle" class="muted"></p>
+      <div class="progress"><div id="expBar" class="bar"></div></div>
+      <p id="zoneSummary" class="small muted"></p>
+      <div id="zoneGrid" class="zones"></div>
+      <div class="row" style="margin-top:8px;">
+        <button id="bestZoneBtn">Focus Best Zone</button>
+        <button id="newRegionBtn">Reroll Region</button>
+        <button id="worldJumpBtn">World Jump (Prestige)</button>
+      </div>
+    </section>
+
+    <section id="economy" class="panel">
+      <h2>Economy & Production</h2>
+      <div id="resourceGrid" class="resource-grid"></div>
+
+      <h3 style="margin-top:10px;">Crafting</h3>
+      <div class="row">
+        <button data-craft="tools">Craft Tools</button>
+        <button data-craft="alloys">Smelt Alloys</button>
+        <button data-craft="drones">Build Drone</button>
+      </div>
+
+      <h3 style="margin-top:10px;">Buildings</h3>
+      <div id="buildingCards" class="card-grid"></div>
+
+      <h3 style="margin-top:10px;">Research</h3>
+      <div id="techCards" class="card-grid"></div>
+    </section>
+
+    <section id="automation" class="panel">
+      <h2>Automation & Contracts</h2>
+      <div id="contractCard" class="card"></div>
+
+      <h3 style="margin-top:10px;">Automation Policies</h3>
+      <div class="row">
+        <button data-auto="master" id="autoMaster">Auto OFF</button>
+        <button data-auto="target">Auto Target</button>
+        <button data-auto="craft">Auto Craft</button>
+        <button data-auto="build">Auto Build</button>
+        <button data-auto="research">Auto Research</button>
+      </div>
+      <p id="autoSummary" class="muted small"></p>
+
+      <h3 style="margin-top:10px;">Mercantile Exchange</h3>
+      <div class="row">
+        <button id="sellOreBtn">Sell 40 Ore → Credits</button>
+        <button id="buyCrystalBtn">Buy 1 Crystal</button>
+        <button id="buyFoodBtn">Buy 40 Food</button>
+      </div>
+    </section>
+
+    <section id="meta" class="panel">
+      <h2>Meta Progression</h2>
+      <p>Echo Shards: <strong id="shardText">0</strong></p>
+      <div class="row">
+        <button data-meta="yield">+6% Yield (6)</button>
+        <button data-meta="speed">+7% Speed (7)</button>
+        <button data-meta="fortune">+8% Rare (9)</button>
+      </div>
+      <p id="metaSummary" class="small muted"></p>
+
+      <hr style="border-color:#33458d; margin:10px 0;" />
+      <h3>Save</h3>
+      <div class="row">
+        <button id="saveBtn">Save</button>
+        <button id="loadBtn">Load</button>
+        <button id="resetBtn">Full Reset</button>
+      </div>
+    </section>
+
+    <section id="log" class="panel">
+      <h2>Event Log</h2>
+      <div id="eventLog"></div>
+    </section>
+  </main>
+
+  <script>
+    const BIOMES = ["Verdant Ring", "Iron Barrens", "Azure Delta", "Cinder Shelf", "Lumen Reef", "Glass Steppe", "Storm Pits", "Obsidian Wilds"];
+    const ZONE_TYPES = ["forest", "quarry", "ruins", "cavern", "wetland", "scrapyard", "rift", "plateau"];
+    const TRAITS = ["fertile", "fragile", "volatile", "ancient", "resonant", "fogged", "scarred", "dense"];
+
+    const BUILDINGS = {
+      farm: { name: "Farm", cost: { wood: 40, stone: 20 }, base: { food: 0.7 } },
+      mine: { name: "Mine", cost: { wood: 30, tools: 1, stone: 35 }, base: { ore: 0.6, stone: 0.3 } },
+      lab: { name: "Lab", cost: { ore: 60, crystal: 3, energy: 20 }, base: { science: 0.45 } },
+      plant: { name: "Power Plant", cost: { ore: 75, alloys: 8 }, base: { energy: 0.7 } },
+      foundry: { name: "Foundry", cost: { ore: 120, energy: 40, tools: 2 }, base: { alloys: 0.35 } }
+    };
+
+    const TECHS = {
+      surveying: { name: "Surveying", cost: { science: 45 }, effect: "Reveal high-value zones faster", once: true },
+      hydroponics: { name: "Hydroponics", cost: { science: 70, alloys: 8 }, effect: "+40% food from Farms", once: true },
+      robotics: { name: "Robotics", cost: { science: 120, alloys: 20, crystal: 6 }, effect: "+20% drone efficiency", once: true },
+      phaseDrills: { name: "Phase Drills", cost: { science: 220, energy: 80, alloys: 35 }, effect: "+35% ore yield", once: true },
+      synthesis: { name: "Synthesis", cost: { science: 350, crystal: 15, energy: 140 }, effect: "Unlock richer contracts", once: true }
+    };
+
+    function makeDefault() {
+      return {
+        seed: Math.floor(Math.random() * 1e9),
+        biome: "",
+        worldTier: 1,
+        worldsCleared: 0,
+        runtimeMs: 0,
+        diffMod: 1,
+        region: [],
+        expedition: { targetId: null, duration: 7000, progress: 0 },
+        resources: {
+          food: 80,
+          wood: 70,
+          stone: 60,
+          ore: 45,
+          crystal: 8,
+          energy: 0,
+          science: 0,
+          data: 0,
+          tools: 1,
+          alloys: 0,
+          drones: 0,
+          credits: 25
+        },
+        buildings: { farm: 0, mine: 0, lab: 0, plant: 0, foundry: 0 },
+        tech: {},
+        contract: null,
+        auto: {
+          master: false,
+          target: false,
+          craft: false,
+          build: false,
+          research: false
+        },
+        meta: {
+          shards: 0,
+          yield: 0,
+          speed: 0,
+          fortune: 0
+        },
+        lastTickAt: Date.now(),
+        stats: { expeditions: 0, encounters: 0, crafted: 0 }
+      };
+    }
+
+    let state = load() || makeDefault();
+
+    function rng(seed) {
+      let x = seed | 0;
+      return () => {
+        x ^= x << 13;
+        x ^= x >>> 17;
+        x ^= x << 5;
+        return ((x >>> 0) % 1_000_000) / 1_000_000;
+      };
+    }
+
+    function value(num) {
+      if (num >= 1e6) return (num / 1e6).toFixed(2) + "M";
+      if (num >= 1e3) return (num / 1e3).toFixed(1) + "K";
+      return Math.floor(num).toString();
+    }
+
+    function regionName() {
+      return `${state.biome} • Frontier Tier ${state.worldTier}`;
+    }
+
+    function generateRegion(seed, tier) {
+      const rand = rng(seed + tier * 97);
+      const biome = BIOMES[Math.floor(rand() * BIOMES.length)];
+      const count = 16 + Math.min(8, tier);
+      const list = Array.from({ length: count }, (_, idx) => {
+        const richness = 0.85 + rand() * 1.75;
+        const threat = rand() * (0.55 + tier * 0.11);
+        const rare = Math.min(0.5, 0.04 * tier + rand() * 0.15);
+        const type = ZONE_TYPES[Math.floor(rand() * ZONE_TYPES.length)];
+        const trait = TRAITS[Math.floor(rand() * TRAITS.length)];
+        const difficulty = 1 + Math.floor(rand() * (2 + tier));
+        return {
+          id: `${seed}-${idx}`,
+          label: `${biome} ${type} ${idx + 1}`,
+          type,
+          trait,
+          richness,
+          threat,
+          rare,
+          difficulty,
+          explored: false
+        };
+      });
+      return { biome, zones: list };
+    }
+
+    function ensureWorld() {
+      if (!state.region.length) {
+        const made = generateRegion(state.seed, state.worldTier);
+        state.biome = made.biome;
+        state.region = made.zones;
+      }
+      if (!state.expedition.targetId && state.region[0]) state.expedition.targetId = state.region[0].id;
+      if (!state.contract) state.contract = newContract();
+    }
+
+    function newContract() {
+      const picks = ["ore", "food", "science", "data", "alloys"];
+      const type = picks[Math.floor(Math.random() * picks.length)];
+      const depthBonus = state.tech.synthesis ? 1.45 : 1;
+      const need = Math.floor((80 + Math.random() * 90 + state.worldTier * 22) * depthBonus);
+      const reward = Math.floor((18 + state.worldTier * 6 + Math.random() * 18) * depthBonus);
+      const creditBonus = 20 + Math.floor(Math.random() * 25);
+      return { type, need, reward, creditBonus, text: `Deliver ${need} ${type}` };
+    }
+
+    function targetZone() {
+      return state.region.find(z => z.id === state.expedition.targetId);
+    }
+
+    function log(msg, cls = "") {
+      const box = document.getElementById("eventLog");
+      const div = document.createElement("div");
+      div.className = cls;
+      div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      box.prepend(div);
+      while (box.children.length > 150) box.removeChild(box.lastChild);
+    }
+
+    function addRes(key, amount) {
+      state.resources[key] = (state.resources[key] || 0) + amount;
+      if (state.resources[key] < 0) state.resources[key] = 0;
+    }
+
+    function canPay(cost) {
+      return Object.entries(cost).every(([k, v]) => (state.resources[k] || 0) >= v);
+    }
+
+    function pay(cost) {
+      if (!canPay(cost)) return false;
+      Object.entries(cost).forEach(([k, v]) => addRes(k, -v));
+      return true;
+    }
+
+    function expeditionDuration() {
+      const base = 7000;
+      const toolCut = state.resources.tools * 35;
+      const speedMeta = 1 + state.meta.speed * 0.07;
+      const droneSpeed = 1 + state.resources.drones * 0.01 + (state.tech.robotics ? 0.2 : 0);
+      const tierPenalty = 1 + state.worldTier * 0.015;
+      return Math.max(2000, (base - toolCut) * tierPenalty / (speedMeta * droneSpeed));
+    }
+
+    function expeditionTick(dt) {
+      const zone = targetZone();
+      if (!zone) return;
+      state.expedition.duration = expeditionDuration();
+      state.expedition.progress += dt;
+
+      if (state.expedition.progress < state.expedition.duration) return;
+      state.expedition.progress = 0;
+      zone.explored = true;
+      state.stats.expeditions++;
+
+      const yieldMeta = 1 + state.meta.yield * 0.06;
+      const difficultyTax = Math.max(0.35, 1 - zone.threat * 0.4);
+      const core = zone.richness * yieldMeta * difficultyTax / state.diffMod;
+
+      const wood = zone.type === "forest" ? 4 : 1;
+      const stone = zone.type === "quarry" ? 4 : 1;
+      const ore = zone.type === "cavern" || zone.type === "scrapyard" ? 4 : 1;
+      const data = zone.type === "ruins" || zone.type === "rift" ? 3 : 1;
+      const food = zone.type === "wetland" ? 4 : 1;
+
+      addRes("wood", Math.floor(wood * (1.5 + zone.difficulty) * core));
+      addRes("stone", Math.floor(stone * (1 + zone.difficulty * 0.8) * core));
+      addRes("ore", Math.floor(ore * (1.1 + zone.difficulty) * core));
+      addRes("data", Math.floor(data * (0.9 + zone.difficulty * 0.7) * core));
+      addRes("food", Math.floor(food * (1.3 + zone.difficulty * 0.9) * core));
+
+      if (Math.random() < zone.rare + state.meta.fortune * 0.08) {
+        const c = 1 + Math.floor(Math.random() * (1 + Math.floor(state.worldTier / 2)));
+        addRes("crystal", c);
+        log(`Rare cache in ${zone.label}: +${c} crystal.`, "good");
+      }
+
+      if (Math.random() < zone.threat * 0.1 * state.diffMod) {
+        const loss = Math.min(state.resources.food, 5 + Math.floor(zone.threat * 8));
+        addRes("food", -loss);
+        log(`Hazard at ${zone.label}: -${loss} food.`, "warn");
+      }
+
+      if (Math.random() < 0.08 + state.worldTier * 0.01) triggerEncounter(zone);
+
+      log(`Expedition complete at ${zone.label}.`, "");
+      checkContract();
+      maybeClearWorld();
+    }
+
+    function triggerEncounter(zone) {
+      state.stats.encounters++;
+      const roll = Math.random();
+      if (roll < 0.34) {
+        const bonus = 20 + Math.floor(zone.richness * 25);
+        addRes("credits", bonus);
+        log(`Trader caravan discovered near ${zone.label}: +${bonus} credits.`, "good");
+      } else if (roll < 0.68) {
+        const s = 15 + Math.floor(zone.difficulty * 5);
+        addRes("science", s);
+        log(`Ancient archive decoded: +${s} science.`, "good");
+      } else {
+        state.diffMod = Math.min(1.8, state.diffMod + 0.03);
+        log(`Instability surge! Difficulty modifier increased to ${state.diffMod.toFixed(2)}x.`, "warn");
+      }
+    }
+
+    function passiveProduction(dtMs) {
+      const sec = dtMs / 1000;
+      const b = state.buildings;
+      const techFood = state.tech.hydroponics ? 1.4 : 1;
+      const techOre = state.tech.phaseDrills ? 1.35 : 1;
+
+      addRes("food", b.farm * BUILDINGS.farm.base.food * techFood * sec);
+      addRes("ore", b.mine * BUILDINGS.mine.base.ore * techOre * sec);
+      addRes("stone", b.mine * BUILDINGS.mine.base.stone * sec);
+      addRes("science", b.lab * BUILDINGS.lab.base.science * sec);
+      addRes("energy", b.plant * BUILDINGS.plant.base.energy * sec);
+      addRes("alloys", b.foundry * BUILDINGS.foundry.base.alloys * sec);
+
+      const upkeep = (b.lab * 0.08 + b.foundry * 0.15 + state.resources.drones * 0.02) * sec;
+      addRes("food", -upkeep * 0.7);
+      addRes("energy", -upkeep * 0.4);
+    }
+
+    function maybeClearWorld() {
+      const explored = state.region.filter(z => z.explored).length;
+      const needed = Math.ceil(state.region.length * 0.75);
+      if (explored < needed) return;
+
+      const shardGain = 2 + Math.floor(state.worldTier * 0.9 + explored / 8);
+      addShards(shardGain);
+      state.worldsCleared++;
+      state.worldTier++;
+      state.diffMod = Math.max(1, state.diffMod * 0.98);
+      state.seed = (state.seed * 1664525 + 1013904223) % 2147483647;
+
+      const next = generateRegion(state.seed, state.worldTier);
+      state.biome = next.biome;
+      state.region = next.zones;
+      state.expedition.targetId = state.region[0].id;
+      state.contract = newContract();
+
+      log(`World cleared! +${shardGain} shards. Entering Tier ${state.worldTier}.`, "good");
+    }
+
+    function checkContract() {
+      const c = state.contract;
+      if (!c) return;
+      if ((state.resources[c.type] || 0) < c.need) return;
+      addRes(c.type, -c.need);
+      addShards(c.reward);
+      addRes("credits", c.creditBonus);
+      log(`Contract fulfilled: ${c.text}. +${c.reward} shards, +${c.creditBonus} credits.`, "good");
+      state.contract = newContract();
+    }
+
+    function addShards(n) {
+      state.meta.shards += n;
+    }
+
+    function craft(kind) {
+      const recipes = {
+        tools: { cost: { wood: 35, stone: 25, ore: 20 }, out: { tools: 1 } },
+        alloys: { cost: { ore: 40, energy: 20 }, out: { alloys: 5 } },
+        drones: { cost: { alloys: 12, crystal: 2, data: 35 }, out: { drones: 1 } }
+      };
+      const r = recipes[kind];
+      if (!r) return;
+      if (!pay(r.cost)) {
+        log("Not enough resources for crafting.", "warn");
+        return;
+      }
+      Object.entries(r.out).forEach(([k, v]) => addRes(k, v));
+      state.stats.crafted++;
+      log(`Crafted ${Object.entries(r.out).map(([k, v]) => `${v} ${k}`).join(", ")}.`, "good");
+    }
+
+    function buyBuilding(key) {
+      const data = BUILDINGS[key];
+      if (!data) return;
+      const owned = state.buildings[key] || 0;
+      const scale = 1 + owned * 0.28;
+      const cost = {};
+      Object.entries(data.cost).forEach(([r, v]) => cost[r] = Math.floor(v * scale));
+      if (!pay(cost)) {
+        log(`Cannot afford ${data.name}.`, "warn");
+        return;
+      }
+      state.buildings[key] = owned + 1;
+      log(`Constructed ${data.name} #${state.buildings[key]}.`, "good");
+    }
+
+    function buyTech(key) {
+      const t = TECHS[key];
+      if (!t || state.tech[key]) return;
+      if (!pay(t.cost)) {
+        log(`Missing resources for research: ${t.name}.`, "warn");
+        return;
+      }
+      state.tech[key] = true;
+      log(`Research complete: ${t.name} — ${t.effect}.`, "good");
+    }
+
+    function toggleAuto(key) {
+      if (!state.auto[key] && !state.auto.master && key !== "master") {
+        log("Enable Auto Master first.", "warn");
+        return;
+      }
+      state.auto[key] = !state.auto[key];
+      if (key === "master" && !state.auto.master) {
+        state.auto.target = false;
+        state.auto.craft = false;
+        state.auto.build = false;
+        state.auto.research = false;
+      }
+      log(`Automation ${key}: ${state.auto[key] ? "ON" : "OFF"}.`);
+    }
+
+    function autoPlay() {
+      if (!state.auto.master) return;
+
+      if (state.auto.target) {
+        const best = state.region
+          .map(z => ({ z, score: z.richness * (1 - z.threat * 0.45) + z.rare * (1 + state.meta.fortune * 0.2) }))
+          .sort((a, b) => b.score - a.score)[0];
+        if (best) state.expedition.targetId = best.z.id;
+      }
+
+      if (state.auto.craft) {
+        if (canPay({ wood: 35, stone: 25, ore: 20 }) && state.resources.tools < 90) craft("tools");
+        if (canPay({ ore: 40, energy: 20 }) && state.resources.alloys < 180) craft("alloys");
+        if (canPay({ alloys: 12, crystal: 2, data: 35 }) && state.resources.drones < 60) craft("drones");
+      }
+
+      if (state.auto.build) {
+        const priority = ["farm", "mine", "plant", "lab", "foundry"];
+        for (const b of priority) {
+          if ((state.buildings[b] || 0) < 18) {
+            const owned = state.buildings[b] || 0;
+            const scale = 1 + owned * 0.28;
+            const checkCost = {};
+            Object.entries(BUILDINGS[b].cost).forEach(([r, v]) => checkCost[r] = Math.floor(v * scale));
+            if (canPay(checkCost)) {
+              buyBuilding(b);
+              break;
+            }
+          }
+        }
+      }
+
+      if (state.auto.research) {
+        const todo = Object.keys(TECHS).find(k => !state.tech[k] && canPay(TECHS[k].cost));
+        if (todo) buyTech(todo);
+      }
+    }
+
+    function focusBestZone() {
+      const best = state.region
+        .map(z => ({ z, score: z.richness * (1 - z.threat * 0.4) + z.rare }))
+        .sort((a, b) => b.score - a.score)[0];
+      if (!best) return;
+      state.expedition.targetId = best.z.id;
+      log(`Focused on ${best.z.label}.`);
+    }
+
+    function rerollRegion() {
+      if (!pay({ credits: 40 })) {
+        log("Need 40 credits to reroll region.", "warn");
+        return;
+      }
+      state.seed = Math.floor(Math.random() * 1e9);
+      const made = generateRegion(state.seed, state.worldTier);
+      state.biome = made.biome;
+      state.region = made.zones;
+      state.expedition.targetId = state.region[0]?.id || null;
+      log("Region rerolled with fresh procedural zones.", "good");
+    }
+
+    function worldJump() {
+      const potential = Math.floor((state.worldTier + state.worldsCleared + state.resources.drones / 5 + Object.keys(state.tech).length * 1.5) / 2);
+      if (potential < 5) {
+        log("Need more progress before World Jump (minimum 5 shard gain).", "warn");
+        return;
+      }
+      addShards(potential);
+      const keepMeta = structuredClone(state.meta);
+      state = makeDefault();
+      state.meta = keepMeta;
+      state.seed = Math.floor(Math.random() * 1e9);
+      ensureWorld();
+      log(`World Jump complete! +${potential} shards and a fresh run.`, "good");
+    }
+
+    function buyMeta(type) {
+      const costs = { yield: 6, speed: 7, fortune: 9 };
+      const c = costs[type];
+      if (!c) return;
+      if (state.meta.shards < c) {
+        log("Not enough shards.", "warn");
+        return;
+      }
+      state.meta.shards -= c;
+      state.meta[type] += 1;
+      log(`Meta upgrade purchased: ${type}.`, "good");
+    }
+
+    function market(action) {
+      if (action === "sellOre") {
+        if (!pay({ ore: 40 })) return log("Need 40 ore to sell.", "warn");
+        addRes("credits", 30);
+        log("Sold ore for 30 credits.", "good");
+      }
+      if (action === "buyCrystal") {
+        if (!pay({ credits: 45 })) return log("Need 45 credits.", "warn");
+        addRes("crystal", 1);
+        log("Bought 1 crystal.", "good");
+      }
+      if (action === "buyFood") {
+        if (!pay({ credits: 22 })) return log("Need 22 credits.", "warn");
+        addRes("food", 40);
+        log("Bought 40 food.", "good");
+      }
+    }
+
+    function save() {
+      const payload = { ...state, lastTickAt: Date.now() };
+      localStorage.setItem("procland-infinite-save", JSON.stringify(payload));
+      log("Saved.");
+    }
+
+    function load() {
+      try {
+        const raw = localStorage.getItem("procland-infinite-save");
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        const merged = { ...makeDefault(), ...parsed };
+        merged.resources = { ...makeDefault().resources, ...(parsed.resources || {}) };
+        merged.buildings = { ...makeDefault().buildings, ...(parsed.buildings || {}) };
+        merged.auto = { ...makeDefault().auto, ...(parsed.auto || {}) };
+        merged.meta = { ...makeDefault().meta, ...(parsed.meta || {}) };
+        merged.stats = { ...makeDefault().stats, ...(parsed.stats || {}) };
+        return merged;
+      } catch {
+        return null;
+      }
+    }
+
+    function applyOfflineProgress() {
+      const now = Date.now();
+      const elapsed = Math.max(0, Math.min(1000 * 60 * 60 * 6, now - (state.lastTickAt || now)));
+      if (elapsed < 5000) return;
+
+      const sec = elapsed / 1000;
+      passiveProduction(elapsed);
+      addRes("credits", Math.floor(sec / 50));
+      state.runtimeMs += elapsed;
+      log(`Offline progress applied: ${(sec / 60).toFixed(1)} min.`, "good");
+    }
+
+    function resetAll() {
+      localStorage.removeItem("procland-infinite-save");
+      state = makeDefault();
+      ensureWorld();
+      render();
+      log("Full reset complete.", "warn");
+    }
+
+    function renderResources() {
+      const grid = document.getElementById("resourceGrid");
+      const order = ["food", "wood", "stone", "ore", "crystal", "energy", "science", "data", "tools", "alloys", "drones", "credits"];
+      grid.innerHTML = order.map(k => `<div class="resource"><span>${k}</span><strong>${value(state.resources[k] || 0)}</strong></div>`).join("");
+    }
+
+    function renderZones() {
+      const zoneGrid = document.getElementById("zoneGrid");
+      const cur = targetZone();
+      zoneGrid.innerHTML = "";
+      state.region.forEach(z => {
+        const div = document.createElement("div");
+        div.className = `zone ${cur?.id === z.id ? "active" : ""}`;
+        div.innerHTML = `
+          <strong>${z.label}</strong>
+          <div class="small muted">${z.type} • ${z.trait}</div>
+          <div class="small">Rich ${(z.richness).toFixed(2)} • Threat ${(z.threat * 100).toFixed(0)}%</div>
+          <div class="small">Rare ${(z.rare * 100).toFixed(0)}% • Diff ${z.difficulty}</div>
+        `;
+        div.onclick = () => { state.expedition.targetId = z.id; render(); };
+        zoneGrid.appendChild(div);
+      });
+
+      document.getElementById("zoneSummary").textContent = cur
+        ? `Target: ${cur.label} — ${cur.type} biome with ${cur.trait} trait.`
+        : "No target zone selected.";
+    }
+
+    function renderBuildings() {
+      const host = document.getElementById("buildingCards");
+      host.innerHTML = "";
+      for (const key of Object.keys(BUILDINGS)) {
+        const b = BUILDINGS[key];
+        const owned = state.buildings[key] || 0;
+        const scale = 1 + owned * 0.28;
+        const cost = Object.entries(b.cost).map(([r, v]) => `${r}:${Math.floor(v * scale)}`).join(" ");
+        const out = Object.entries(b.base).map(([r, v]) => `${r}+${v}/s`).join(", ");
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `<strong>${b.name} (${owned})</strong><div class="small muted">Output ${out}</div><div class="small">Cost ${cost}</div>`;
+        const btn = document.createElement("button");
+        btn.textContent = `Build ${b.name}`;
+        btn.onclick = () => { buyBuilding(key); render(); };
+        card.appendChild(btn);
+        host.appendChild(card);
+      }
+    }
+
+    function renderTech() {
+      const host = document.getElementById("techCards");
+      host.innerHTML = "";
+      for (const key of Object.keys(TECHS)) {
+        const t = TECHS[key];
+        const done = !!state.tech[key];
+        const costTxt = Object.entries(t.cost).map(([r, v]) => `${r}:${v}`).join(" ");
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `<strong>${t.name} ${done ? "✓" : ""}</strong><div class="small muted">${t.effect}</div><div class="small">Cost ${costTxt}</div>`;
+        const btn = document.createElement("button");
+        btn.textContent = done ? "Researched" : "Research";
+        btn.disabled = done;
+        btn.onclick = () => { buyTech(key); render(); };
+        card.appendChild(btn);
+        host.appendChild(card);
+      }
+    }
+
+    function renderContract() {
+      const c = state.contract;
+      document.getElementById("contractCard").innerHTML = c
+        ? `<strong>Contract</strong><div class="small">${c.text}</div><div class="small muted">Reward: ${c.reward} shards + ${c.creditBonus} credits</div><div class="small">Progress: ${value(state.resources[c.type] || 0)} / ${c.need}</div>`
+        : "No contract";
+    }
+
+    function render() {
+      document.getElementById("seedText").textContent = state.seed;
+      document.getElementById("tierText").textContent = state.worldTier;
+      document.getElementById("runtimeText").textContent = `${Math.floor(state.runtimeMs / 1000)}s`;
+      document.getElementById("clearsText").textContent = state.worldsCleared;
+      document.getElementById("diffText").textContent = `${state.diffMod.toFixed(2)}x`;
+      document.getElementById("regionTitle").textContent = regionName();
+      document.getElementById("shardText").textContent = value(state.meta.shards);
+      document.getElementById("metaSummary").textContent = `Yield +${state.meta.yield * 6}% • Speed +${state.meta.speed * 7}% • Rare +${state.meta.fortune * 8}%`;
+
+      document.getElementById("autoMaster").textContent = state.auto.master ? "Auto ON" : "Auto OFF";
+      document.getElementById("autoSummary").textContent = `target:${state.auto.target ? "on" : "off"} craft:${state.auto.craft ? "on" : "off"} build:${state.auto.build ? "on" : "off"} research:${state.auto.research ? "on" : "off"}`;
+
+      document.getElementById("expBar").style.width = `${Math.min(100, (state.expedition.progress / state.expedition.duration) * 100)}%`;
+
+      renderResources();
+      renderZones();
+      renderBuildings();
+      renderTech();
+      renderContract();
+    }
+
+    function bindUi() {
+      document.getElementById("bestZoneBtn").onclick = () => { focusBestZone(); render(); };
+      document.getElementById("newRegionBtn").onclick = () => { rerollRegion(); render(); };
+      document.getElementById("worldJumpBtn").onclick = () => { worldJump(); render(); };
+
+      document.querySelectorAll("button[data-craft]").forEach(btn => {
+        btn.onclick = () => { craft(btn.dataset.craft); render(); };
+      });
+
+      document.querySelectorAll("button[data-auto]").forEach(btn => {
+        btn.onclick = () => { toggleAuto(btn.dataset.auto); render(); };
+      });
+
+      document.querySelectorAll("button[data-meta]").forEach(btn => {
+        btn.onclick = () => { buyMeta(btn.dataset.meta); render(); };
+      });
+
+      document.getElementById("sellOreBtn").onclick = () => { market("sellOre"); render(); };
+      document.getElementById("buyCrystalBtn").onclick = () => { market("buyCrystal"); render(); };
+      document.getElementById("buyFoodBtn").onclick = () => { market("buyFood"); render(); };
+
+      document.getElementById("saveBtn").onclick = save;
+      document.getElementById("loadBtn").onclick = () => {
+        const loaded = load();
+        if (!loaded) return log("No save found.", "warn");
+        state = loaded;
+        ensureWorld();
+        render();
+        log("Loaded save.", "good");
+      };
+      document.getElementById("resetBtn").onclick = resetAll;
+    }
+
+    function gameLoop() {
+      const now = Date.now();
+      const dt = Math.min(300, now - state.lastTickAt);
+      state.lastTickAt = now;
+      state.runtimeMs += dt;
+
+      passiveProduction(dt);
+      expeditionTick(dt);
+      autoPlay();
+      render();
+    }
+
+    ensureWorld();
+    bindUi();
+    applyOfflineProgress();
+    render();
+    log("Welcome Commander. ProcLand initialized with a fresh procedural frontier.", "good");
+
+    setInterval(gameLoop, 250);
+    setInterval(save, 15000);
+  </script>
+</body>
+</html>
